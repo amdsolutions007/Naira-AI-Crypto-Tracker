@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Naira-AI-Crypto-Tracker
-Main entry point for the crypto tracking system
+Main entry point for the crypto tracking system - LIVE DATA
 """
 
 import asyncio
@@ -15,159 +15,154 @@ class NairaCryptoTracker:
     """Main tracker class for aggregating crypto prices"""
     
     def __init__(self):
-        self.exchanges = ['binance_p2p', 'luno', 'quidax', 'roqqu']
+        self.exchanges = ['binance', 'coingecko']
         self.supported_coins = ['BTC', 'ETH', 'USDT', 'BNB']
-        self.binance_api = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
         
-    async def fetch_binance_p2p(self, asset: str = 'USDT', fiat: str = 'NGN') -> Dict:
-        """Fetch real-time rates from Binance P2P (Nigerian market)"""
-        print(f"🔍 Fetching Binance P2P rates for {asset}/{fiat}...")
+    async def fetch_binance_ticker(self) -> Dict:
+        """Fetch REAL USDT/NGN rate from Binance Public API"""
+        print("🔍 Fetching LIVE data from Binance...")
         
-        # NOTE: Using simulated data as P2P API requires additional authentication
-        # In production, integrate with official Binance P2P API with proper auth
+        url = "https://api.binance.com/api/v3/ticker/price?symbol=USDTNGN"
         
-        # Realistic USDT/NGN rates based on current Nigerian market
-        simulated_rates = [
-            {'price': 1685.50, 'merchant': 'CryptoKing9ja', 'min': 5000, 'max': 5000000},
-            {'price': 1687.00, 'merchant': 'NaijaTrader247', 'min': 10000, 'max': 2000000},
-            {'price': 1686.25, 'merchant': 'P2PNigeria', 'min': 5000, 'max': 10000000},
-            {'price': 1688.75, 'merchant': 'LagosCrypto', 'min': 20000, 'max': 1000000},
-            {'price': 1684.00, 'merchant': 'AfricanBTC', 'min': 5000, 'max': 3000000}
-        ]
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=10) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        price = float(data.get('price', 0))
+                        
+                        if price > 0:
+                            return {
+                                'source': 'Binance Spot Market',
+                                'symbol': data.get('symbol'),
+                                'price': price,
+                                'timestamp': datetime.utcnow().isoformat(),
+                                'status': 'success'
+                            }
+        except Exception as e:
+            print(f"⚠️ Binance API error: {e}")
         
-        avg_price = sum(r['price'] for r in simulated_rates) / len(simulated_rates)
+        return {'status': 'failed', 'price': 0}
+    
+    async def fetch_coingecko_rate(self) -> Dict:
+        """Fallback: Fetch from CoinGecko API"""
+        print("🔍 Trying CoinGecko API...")
         
+        url = "https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=ngn"
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=10) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        price = data.get('tether', {}).get('ngn', 0)
+                        
+                        if price > 0:
+                            return {
+                                'source': 'CoinGecko',
+                                'symbol': 'USDT/NGN',
+                                'price': float(price),
+                                'timestamp': datetime.utcnow().isoformat(),
+                                'status': 'success'
+                            }
+        except Exception as e:
+            print(f"⚠️ CoinGecko API error: {e}")
+        
+        return {'status': 'failed', 'price': 0}
+    
+    async def get_live_rate(self) -> Dict:
+        """Get live USDT/NGN rate from available sources"""
+        # Try Binance first
+        binance_data = await self.fetch_binance_ticker()
+        if binance_data.get('status') == 'success':
+            return binance_data
+        
+        # Fallback to CoinGecko
+        coingecko_data = await self.fetch_coingecko_rate()
+        if coingecko_data.get('status') == 'success':
+            return coingecko_data
+        
+        # All sources failed
         return {
-            'exchange': 'Binance P2P',
-            'asset': asset,
-            'fiat': fiat,
-            'rates': simulated_rates,
-            'average': avg_price,
-            'timestamp': datetime.utcnow().isoformat(),
-            'note': '⚠️ Demo mode - Real API integration requires authentication'
+            'status': 'failed',
+            'error': 'Connection Failed',
+            'price': 0
         }
     
-    async def get_binance_p2p_rates(self, coin: str) -> Dict:
-        """Legacy method - redirects to fetch_binance_p2p"""
-        result = await self.fetch_binance_p2p(coin, 'NGN')
-        return {
-            'exchange': 'Binance P2P',
-            'coin': coin,
-            'buy': result['average'],
-            'sell': result['average'],
-            'timestamp': result['timestamp']
-        }
-    
-    async def get_luno_rates(self, coin: str) -> Dict:
-        """Fetch rates from Luno Nigeria"""
-        # TODO: Implement Luno API integration
-        return {
-            'exchange': 'Luno',
-            'coin': coin,
-            'buy': 0,
-            'sell': 0,
-            'timestamp': datetime.utcnow().isoformat()
-        }
-    
-    async def get_quidax_rates(self, coin: str) -> Dict:
-        """Fetch rates from Quidax"""
-        # TODO: Implement Quidax API integration
-        return {
-            'exchange': 'Quidax',
-            'coin': coin,
-            'buy': 0,
-            'sell': 0,
-            'timestamp': datetime.utcnow().isoformat()
-        }
-    
-    async def get_roqqu_rates(self, coin: str) -> Dict:
-        """Fetch rates from Roqqu"""
-        # TODO: Implement Roqqu API integration
-        return {
-            'exchange': 'Roqqu',
-            'coin': coin,
-            'buy': 0,
-            'sell': 0,
-            'timestamp': datetime.utcnow().isoformat()
-        }
-    
-    async def get_all_rates(self, coin: str = 'BTC') -> List[Dict]:
-        """Fetch rates from all exchanges"""
-        tasks = [
-            self.get_binance_p2p_rates(coin),
-            self.get_luno_rates(coin),
-            self.get_quidax_rates(coin),
-            self.get_roqqu_rates(coin)
-        ]
+    def analyze_with_ai(self, rate_data: Dict) -> Dict:
+        """AI-powered analysis of live market rates"""
+        rate = rate_data.get('price', 0)
         
-        results = await asyncio.gather(*tasks)
-        return results
-    
-    def find_arbitrage(self, rates: List[Dict]) -> List[Dict]:
-        """Find arbitrage opportunities across exchanges"""
-        opportunities = []
+        if rate == 0:
+            return {
+                'signal': '❌ ERROR: No data available',
+                'rate': 0,
+                'action': 'WAIT',
+                'sentiment': 'unknown',
+                'reasoning': 'Cannot analyze without live data',
+                'confidence': 0
+            }
         
-        # TODO: Implement arbitrage detection logic
-        # Compare buy/sell prices across exchanges
-        # Calculate profit percentages
-        # Filter by minimum profit threshold
-        
-        return opportunities
-    
-    def analyze_with_ai(self, binance_data: Dict) -> Dict:
-        """AI-powered analysis of Binance P2P rates"""
-        avg_rate = binance_data.get('average', 0)
-        
-        # AI Signal Logic
-        if avg_rate > 1750:
+        # AI Signal Logic based on REAL market conditions
+        if rate > 1750:
             signal = "📈 SIGNAL: HIGH SELLING PRESSURE"
             action = "WAIT"
-            reasoning = f"USDT/NGN at ₦{avg_rate:.2f} - Sellers dominating. Wait for price drop."
+            reasoning = f"USDT/NGN at ₦{rate:.2f} - Sellers dominating. Wait for price drop."
             sentiment = "bearish"
-        elif avg_rate < 1650:
+        elif rate < 1650:
             signal = "📉 SIGNAL: GOOD BUY ZONE"
             action = "BUY"
-            reasoning = f"USDT/NGN at ₦{avg_rate:.2f} - Excellent buying opportunity!"
+            reasoning = f"USDT/NGN at ₦{rate:.2f} - Excellent buying opportunity!"
             sentiment = "bullish"
         else:
             signal = "⚖️ SIGNAL: NEUTRAL ZONE"
             action = "HOLD"
-            reasoning = f"USDT/NGN at ₦{avg_rate:.2f} - Market balanced. Monitor closely."
+            reasoning = f"USDT/NGN at ₦{rate:.2f} - Market balanced. Monitor closely."
             sentiment = "neutral"
         
         return {
             'signal': signal,
-            'rate': avg_rate,
+            'rate': rate,
             'action': action,
             'sentiment': sentiment,
             'reasoning': reasoning,
-            'confidence': 0.85
+            'confidence': 0.85,
+            'source': rate_data.get('source', 'Unknown')
         }
 
 
 async def main():
     """Main execution function"""
-    print("🇳🇬 Naira-AI-Crypto-Tracker v0.1.0")
+    print("🇳🇬 Naira-AI-Crypto-Tracker v0.2.0")
+    print("=" * 60)
+    print("💰 LIVE MARKET DATA MODE")
     print("=" * 60)
     
     tracker = NairaCryptoTracker()
     
-    # Fetch Binance P2P rates (Real Money!)
-    print("\n💰 Fetching REAL Binance P2P Rates...")
-    binance_data = await tracker.fetch_binance_p2p('USDT', 'NGN')
+    # Fetch REAL live rate
+    print("\n🌐 Fetching REAL USDT/NGN rate...")
+    rate_data = await tracker.get_live_rate()
     
-    print(f"\n💹 Current USDT/NGN Rates (Top 5 Merchants):")
-    print("-" * 60)
-    for i, rate in enumerate(binance_data['rates'], 1):
-        print(f"  {i}. ₦{rate['price']:,.2f} | {rate['merchant'][:20]:<20} | ₦{rate['min']:,.0f}-₦{rate['max']:,.0f}")
+    if rate_data.get('status') == 'failed':
+        print("\n" + "=" * 60)
+        print("❌ ERROR: Connection Failed")
+        print("=" * 60)
+        print("\nCould not fetch live data from any source.")
+        print("Please check your internet connection and try again.")
+        return
     
-    print("-" * 60)
-    print(f"📊 AVERAGE RATE: ₦{binance_data['average']:,.2f}")
+    # Display live rate
+    print("\n" + "=" * 60)
+    print(f"💹 LIVE RATE: ₦{rate_data['price']:,.2f}")
+    print(f"📡 Source: {rate_data['source']}")
+    print(f"🕐 Time: {rate_data['timestamp']}")
+    print("=" * 60)
     
     # AI Analysis
-    print("\n🤖 AI ANALYSIS:")
+    print("\n🤖 AI MARKET ANALYSIS:")
     print("=" * 60)
-    analysis = tracker.analyze_with_ai(binance_data)
+    analysis = tracker.analyze_with_ai(rate_data)
     print(f"\n{analysis['signal']}")
     print(f"\n💡 Recommendation: {analysis['action']}")
     print(f"📝 Reasoning: {analysis['reasoning']}")
@@ -175,7 +170,7 @@ async def main():
     print(f"📈 Sentiment: {analysis['sentiment'].upper()}")
     
     print("\n" + "=" * 60)
-    print("✅ THE TOOL CAN SEE MONEY! 💵")
+    print("✅ REAL MONEY DETECTED! 💵")
     print("=" * 60)
 
 
