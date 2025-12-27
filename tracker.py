@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Naira-AI-Crypto-Tracker
-Main entry point for the crypto tracking system - LIVE DATA
+Main entry point for the crypto tracking system - LIVE DATA + TELEGRAM ALERTS
 """
 
 import asyncio
@@ -9,6 +9,8 @@ from typing import Dict, List
 import json
 from datetime import datetime
 import aiohttp
+import os
+import requests
 
 
 class NairaCryptoTracker:
@@ -17,6 +19,8 @@ class NairaCryptoTracker:
     def __init__(self):
         self.exchanges = ['binance', 'coingecko']
         self.supported_coins = ['BTC', 'ETH', 'USDT', 'BNB']
+        self.telegram_token = os.getenv('TELEGRAM_BOT_TOKEN')
+        self.telegram_chat_id = os.getenv('TELEGRAM_CHAT_ID')
         
     async def fetch_binance_ticker(self) -> Dict:
         """Fetch REAL USDT/NGN rate from Binance Public API"""
@@ -129,13 +133,39 @@ class NairaCryptoTracker:
             'confidence': 0.85,
             'source': rate_data.get('source', 'Unknown')
         }
+    
+    def send_telegram_alert(self, message: str) -> bool:
+        """Send alert to Telegram channel/chat"""
+        if not self.telegram_token or not self.telegram_chat_id:
+            print("⚠️ Telegram credentials not configured")
+            return False
+        
+        url = f"https://api.telegram.org/bot{self.telegram_token}/sendMessage"
+        
+        payload = {
+            'chat_id': self.telegram_chat_id,
+            'text': message,
+            'parse_mode': 'HTML'
+        }
+        
+        try:
+            response = requests.post(url, json=payload, timeout=10)
+            if response.status_code == 200:
+                print("✅ Telegram alert sent successfully!")
+                return True
+            else:
+                print(f"⚠️ Telegram API error: {response.status_code}")
+                return False
+        except Exception as e:
+            print(f"⚠️ Failed to send Telegram alert: {e}")
+            return False
 
 
 async def main():
     """Main execution function"""
-    print("🇳🇬 Naira-AI-Crypto-Tracker v0.2.0")
+    print("🇳🇬 Naira-AI-Crypto-Tracker v0.3.0")
     print("=" * 60)
-    print("💰 LIVE MARKET DATA MODE")
+    print("💰 LIVE MARKET DATA + TELEGRAM ALERTS")
     print("=" * 60)
     
     tracker = NairaCryptoTracker()
@@ -168,6 +198,28 @@ async def main():
     print(f"📝 Reasoning: {analysis['reasoning']}")
     print(f"🎯 Confidence: {analysis['confidence'] * 100:.0f}%")
     print(f"📈 Sentiment: {analysis['sentiment'].upper()}")
+    
+    # Send Telegram Alert if actionable signal
+    if analysis['action'] in ['BUY', 'WAIT']:  # BUY = Buy Zone, WAIT = Sell Zone
+        print("\n📱 Sending Telegram Alert...")
+        
+        telegram_message = f"""
+🚨 <b>Naira Crypto Alert</b> 🚨
+
+💹 <b>USDT/NGN Rate:</b> ₦{analysis['rate']:,.2f}
+📡 <b>Source:</b> {analysis['source']}
+
+{analysis['signal']}
+
+💡 <b>Recommendation:</b> {analysis['action']}
+📝 <b>Analysis:</b> {analysis['reasoning']}
+🎯 <b>Confidence:</b> {analysis['confidence'] * 100:.0f}%
+📈 <b>Sentiment:</b> {analysis['sentiment'].upper()}
+
+⏰ {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}
+"""
+        
+        tracker.send_telegram_alert(telegram_message)
     
     print("\n" + "=" * 60)
     print("✅ REAL MONEY DETECTED! 💵")
